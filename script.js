@@ -118,10 +118,80 @@ function generateRealData() {
 
 records = generateRealData();
 
+// MACHINE → PROBLEM mapping sesuai Excel VB-5
+const MACHINE_PROBLEMS = {
+  'Batching Plant': [
+    'Hoper','Weighting Belt','Listrik','Collecting Belt','Hoper timbangan','Vibrator hoper',
+  ],
+  'Mixing Plant': [
+    'Sendok mixer','Pintu mixer','Gear boxes mixer','Pompa air','Seling skif hoish',
+    'Skif Hois','Listrik','Timbangan Semen','Screw Plyash','Screw Semen-1',
+    'Screw Semen-2','Water Dosing','Liner mixer','Lantai mixer',
+  ],
+  'Traveling Bucket': [
+    'Hoper','Roda/as/bearing','Vibrator','Pompa oil/palve','Listrik',
+  ],
+  'Machine Plant': [
+    'Hydrolic System','Feed Drawer I','Feed Drawer II','Cakar / Agitator',
+    'Unloader pallet','Vibrator Atas','Listrik','Vibrator Bawah','Cetakan',
+    'Temper Head','Conpayor ( Belakang )','Conpayor ( Depan )','Fallet Feeder','Elevator',
+  ],
+  'Curing / Finger Cart': [
+    'Curing Chamber','Listrik','Finger Cart',
+  ],
+  'Cubing / Robo Amica': [
+    'Lowerator','Conpayor','Centering Device','Listrik','Cubing',
+    'Pallet Rotating','Pallet Pusher','Pallet Stoking','Stoking Conpayor',
+    'Stated Conpayor','Pallet Transfer Car',
+  ],
+  'Lain-Lain': [
+    'Pallet Macet','Air (material basah)','Hujan','Tunggu adukan','Material',
+    'Cement','Ganti cetak','Kali brasi timbangan','Curing penuh','Loader',
+    'Forklif','Genzet','Stok yard','Tunggu Sparepath','Tunggu Fingercar',
+    'Pallet tertinggal dicuring','Cubing teter','Stell cetak','Buang Adukan',
+    'Ganti warna','Re stok Pallet','Semen Luber di atas mixer',
+    'Corong Hoper material terganjal batu','SPV/Operator Mesin tidak masuk',
+    'Menunggu adukan untuk produksi pagar panel','Mesin stop (Buka puasa)',
+    'Semen tidak mau keluar','Semen Habis',
+  ],
+};
+
+function onMesinChange() {
+  const mesin = document.getElementById('f-mesin').value;
+  const select = document.getElementById('f-problem');
+  const manualWrap = document.getElementById('f-problem-manual-wrap');
+  const problems = MACHINE_PROBLEMS[mesin] || [];
+  if (!mesin) {
+    select.innerHTML = '<option value="">Pilih Kategori Mesin dulu</option>';
+    select.disabled = true;
+    if (manualWrap) manualWrap.style.display = 'none';
+    return;
+  }
+  select.disabled = false;
+  select.innerHTML = '<option value="">Pilih Problem Spesifik</option>'
+    + problems.map(p => `<option value="${p}">${p}</option>`).join('')
+    + '<option value="__lainlain__">— Lain-lain (isi manual) —</option>';
+  if (manualWrap) manualWrap.style.display = 'none';
+}
+
+function onProblemChange() {
+  const val = document.getElementById('f-problem').value;
+  const wrap = document.getElementById('f-problem-manual-wrap');
+  if (wrap) wrap.style.display = val === '__lainlain__' ? 'block' : 'none';
+}
+
+function getProblemValue() {
+  const sel = document.getElementById('f-problem').value;
+  if (sel === '__lainlain__') {
+    return (document.getElementById('f-problem-manual').value || '').trim() || 'Lain-lain';
+  }
+  return sel;
+}
+
 function populateProblems() {
   const select = document.getElementById('f-problem');
-  const uniqueProblems = [...new Set(rawMasterData.map(r => r[1]))].sort();
-  select.innerHTML = '<option value="">Pilih Problem Spesifik</option>' + uniqueProblems.map(p => `<option value="${p}">${p}</option>`).join('');
+  select.innerHTML = '<option value="">Pilih Kategori Mesin dulu</option>';
+  select.disabled = true;
 }
 
 function doLogin(){
@@ -403,7 +473,6 @@ function renderAnalytics(){
 function computeEstimasi(){
   const machines=["Batching Plant","Mixing Plant","Traveling Bucket","Machine Plant","Curing / Finger Cart","Cubing / Robo Amica","Lain-Lain"];
   const uniqueMonths=new Set(records.map(r=>r.tanggal.substring(0,7))).size||1;
-  const totalAvailableHours=uniqueMonths*400; // jam
   const today_dt = new Date();
 
   return machines.map(m=>{
@@ -413,8 +482,12 @@ function computeEstimasi(){
     const totalDowntimeJam = totalDowntimeMnt/60;
     const nBreakdown = breakdownRecs.length||1;
 
-    // MTBF (jam) = (Total Available Hours - Total Downtime Hours) / Jumlah Breakdown
-    const mtbfJam = (totalAvailableHours - totalDowntimeJam) / nBreakdown;
+    // MTBF = Total Waktu Operasi / Jumlah Kegagalan (rumus sesuai standar)
+    // Total Waktu Operasi (mnt) = Total Tersedia - Total Downtime
+    const totalAvailableMnt = uniqueMonths * 400 * 60;
+    const totalOperasiMnt = Math.max(0, totalAvailableMnt - totalDowntimeMnt);
+    const mtbfMnt = totalOperasiMnt / nBreakdown;
+    const mtbfJam = mtbfMnt / 60;
     const mtbfHari = mtbfJam / 24;
 
     // Tanggal service terakhir = tanggal insiden terbaru (breakdown/maintenance)
@@ -431,42 +504,131 @@ function computeEstimasi(){
     if(daysUntil < 0 || daysUntil <= 7) urgency='urgent';
     else if(daysUntil <= 30) urgency='soon';
 
-    return {machine:m, mtbfHari:Math.round(mtbfHari), lastServiceDate, lastProblem, nextServiceDate, daysUntil, urgency, nBreakdown, totalDowntimeMnt};
+    return {machine:m, mtbfHari:Math.round(mtbfHari), mtbfJam:Math.round(mtbfJam), mtbfMnt:Math.round(mtbfMnt), lastServiceDate, lastProblem, nextServiceDate, daysUntil, urgency, nBreakdown, totalDowntimeMnt};
   });
 }
 
 function renderEstimasi(){
   const data = computeEstimasi();
   const urgentItems = data.filter(d=>d.urgency==='urgent');
-  const soonItems = data.filter(d=>d.urgency==='soon');
-  const okItems = data.filter(d=>d.urgency==='ok');
+  const soonItems   = data.filter(d=>d.urgency==='soon');
+  const okItems     = data.filter(d=>d.urgency==='ok');
+
+  // Summary bar
+  const sumBar = document.getElementById('est-summary-bar');
+  sumBar.innerHTML = `
+    <div class="est-sum-card">
+      <div class="est-sum-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <div class="est-sum-label">Perlu Tindakan Segera</div>
+        <div class="est-sum-value">${urgentItems.length}</div>
+        <div class="est-sum-sub">unit mesin dalam kondisi kritis</div>
+      </div>
+    </div>
+    <div class="est-sum-card">
+      <div class="est-sum-icon yellow"><i class="bi bi-clock-history"></i></div>
+      <div>
+        <div class="est-sum-label">Perlu Perhatian</div>
+        <div class="est-sum-value">${soonItems.length}</div>
+        <div class="est-sum-sub">unit mesin dalam 7–30 hari</div>
+      </div>
+    </div>
+    <div class="est-sum-card">
+      <div class="est-sum-icon green"><i class="bi bi-check-circle-fill"></i></div>
+      <div>
+        <div class="est-sum-label">Kondisi Normal</div>
+        <div class="est-sum-value">${okItems.length}</div>
+        <div class="est-sum-sub">unit mesin terjadwal baik</div>
+      </div>
+    </div>`;
+
+  const machineIcons = {
+    'Batching Plant':       'bi-layers',
+    'Mixing Plant':         'bi-arrow-repeat',
+    'Traveling Bucket':     'bi-bucket',
+    'Machine Plant':        'bi-gear-wide-connected',
+    'Curing / Finger Cart': 'bi-thermometer-half',
+    'Cubing / Robo Amica':  'bi-robot',
+    'Lain-Lain':            'bi-three-dots',
+  };
 
   function cardHTML(d){
+    const icon = machineIcons[d.machine] || 'bi-cpu';
     const dateStr = d.nextServiceDate.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
-    const daysTxt = d.daysUntil < 0 ? `Sudah lewat ${Math.abs(d.daysUntil)} hari` : (d.daysUntil === 0 ? 'Hari ini!' : `${d.daysUntil} hari lagi`);
-    const urgLabel = d.urgency==='urgent' ? '<i class="bi bi-exclamation-triangle-fill"></i> Segera' : (d.urgency==='soon' ? '<i class="bi bi-clock"></i> Perhatian' : '<i class="bi bi-check-circle"></i> Normal');
-    return `<div class="est-card ${d.urgency}">
-      <div class="est-card-label">Estimasi Service Berikutnya</div>
-      <div class="est-card-machine">${d.machine}</div>
-      <div class="est-card-problem">Problem terakhir: ${d.lastProblem}</div>
-      <div class="est-card-date ${d.urgency}">${dateStr}</div>
-      <div class="est-card-days">${daysTxt} · MTBF: ${d.mtbfHari} hari · ${d.nBreakdown} breakdown</div>
-      <div class="est-badge ${d.urgency}">${urgLabel}</div>
+    const lastDateStr = d.lastServiceDate.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+    const daysTxt = d.daysUntil < 0
+      ? `Terlambat ${Math.abs(d.daysUntil)} hari`
+      : d.daysUntil === 0 ? 'Hari ini!'
+      : `${d.daysUntil} hari lagi`;
+    const urgLabel = d.urgency==='urgent' ? 'Segera'
+                   : d.urgency==='soon'   ? 'Perhatian'
+                   : 'Normal';
+    // progress bar: % waktu sudah terlewat sejak service terakhir (max 100%)
+    const elapsed = Math.round((new Date() - d.lastServiceDate) / (1000*60*60*24));
+    const totalCycle = Math.max(1, d.mtbfHari);
+    const pct = Math.min(100, Math.round(elapsed / totalCycle * 100));
+
+    return `<div class="est-new-card">
+      <div class="est-new-card-top ${d.urgency}">
+        <div class="est-card-top-row">
+          <div class="est-machine-icon ${d.urgency}"><i class="bi ${icon}"></i></div>
+          <div class="est-urgency-tag ${d.urgency}"><i class="bi bi-circle-fill" style="font-size:7px"></i>${urgLabel}</div>
+        </div>
+        <div class="est-machine-name">${d.machine}</div>
+        <div class="est-last-problem" title="${d.lastProblem}"><i class="bi bi-wrench" style="margin-right:4px;opacity:.6"></i>${d.lastProblem}</div>
+      </div>
+      <div class="est-countdown">
+        <div class="est-next-label">Estimasi Service Berikutnya</div>
+        <div class="est-next-date"><i class="bi bi-calendar3" style="margin-right:6px;opacity:.5;font-size:13px"></i>${dateStr}</div>
+        <div style="margin-bottom:10px">
+          <span class="est-days-chip ${d.urgency}"><i class="bi bi-alarm" style="font-size:11px"></i>${daysTxt}</span>
+        </div>
+        <div class="est-progress-wrap">
+          <div class="est-progress-label">
+            <span>Service terakhir: ${lastDateStr}</span>
+            <span>${pct}% dari siklus MTBF</span>
+          </div>
+          <div class="est-progress-track"><div class="est-progress-fill ${d.urgency}" style="width:${pct}%"></div></div>
+        </div>
+        <div class="est-metrics-row">
+          <div class="est-metric-pill">
+            <div class="est-metric-pill-label">MTBF</div>
+            <div class="est-metric-pill-val">${d.mtbfJam} jam</div>
+          </div>
+          <div class="est-metric-pill">
+            <div class="est-metric-pill-label">Kegagalan</div>
+            <div class="est-metric-pill-val">${d.nBreakdown}×</div>
+          </div>
+          <div class="est-metric-pill">
+            <div class="est-metric-pill-label">Total DT</div>
+            <div class="est-metric-pill-val">${d.totalDowntimeMnt.toLocaleString('id-ID')} mnt</div>
+          </div>
+        </div>
+      </div>
     </div>`;
   }
 
   let html = '';
   if(urgentItems.length){
-    html += `<div class="est-divider"><i class="bi bi-exclamation-triangle-fill" style="color:var(--red)"></i>Perlu Tindakan Segera</div>`;
-    html += `<div class="estimation-grid">${urgentItems.map(cardHTML).join('')}</div>`;
+    html += `<div class="est-section-header">
+      <span class="est-section-pill urgent"><i class="bi bi-exclamation-triangle-fill"></i>Perlu Tindakan Segera — ${urgentItems.length} Unit</span>
+      <div class="est-section-line"></div>
+    </div>
+    <div class="est-grid">${urgentItems.map(cardHTML).join('')}</div>`;
   }
   if(soonItems.length){
-    html += `<div class="est-divider"><i class="bi bi-clock" style="color:var(--yellow)"></i>Perlu Perhatian (7–30 Hari)</div>`;
-    html += `<div class="estimation-grid">${soonItems.map(cardHTML).join('')}</div>`;
+    html += `<div class="est-section-header">
+      <span class="est-section-pill soon"><i class="bi bi-clock-history"></i>Perlu Perhatian (7–30 Hari) — ${soonItems.length} Unit</span>
+      <div class="est-section-line"></div>
+    </div>
+    <div class="est-grid">${soonItems.map(cardHTML).join('')}</div>`;
   }
   if(okItems.length){
-    html += `<div class="est-divider"><i class="bi bi-check-circle" style="color:var(--green-700)"></i>Kondisi Normal (&gt;30 Hari)</div>`;
-    html += `<div class="estimation-grid">${okItems.map(cardHTML).join('')}</div>`;
+    html += `<div class="est-section-header">
+      <span class="est-section-pill ok"><i class="bi bi-check-circle-fill"></i>Kondisi Normal (&gt;30 Hari) — ${okItems.length} Unit</span>
+      <div class="est-section-line"></div>
+    </div>
+    <div class="est-grid">${okItems.map(cardHTML).join('')}</div>`;
   }
   document.getElementById('est-container').innerHTML = html;
 }
@@ -476,7 +638,7 @@ function saveDowntime(){
   const shift=document.getElementById('f-shift').value;
   const mesin=document.getElementById('f-mesin').value;
   const line=document.getElementById('f-line').value;
-  const problem=document.getElementById('f-problem').value;
+  const problem=getProblemValue();
   const status=document.getElementById('f-status').value;
   const lama=parseInt(document.getElementById('f-lama').value)||0;
   const durasi=parseInt(document.getElementById('f-durasi').value)||0;
@@ -490,9 +652,16 @@ function saveDowntime(){
 }
 
 function resetForm(){
-  ['f-shift','f-mesin','f-problem','f-status','f-lama','f-durasi','f-desc','f-action'].forEach(id=>{
+  ['f-shift','f-mesin','f-status','f-lama','f-durasi','f-desc','f-action'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
+  const sel=document.getElementById('f-problem');
+  sel.innerHTML='<option value="">Pilih Kategori Mesin dulu</option>';
+  sel.disabled=true;
+  const mw=document.getElementById('f-problem-manual-wrap');
+  if(mw)mw.style.display='none';
+  const mi=document.getElementById('f-problem-manual');
+  if(mi)mi.value='';
 }
 
 function refreshAll(){
