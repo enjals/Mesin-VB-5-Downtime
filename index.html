@@ -14,7 +14,7 @@
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo"></div>
-    <div class="login-title">Mesin VB-5 Downtime<br>Masih percobaan Testing</div>
+    <div class="login-title">Mesin VB-5 Downtime<br>Monitoring System</div>
     <div class="login-company">PT. Conbloc Internusa</div>
     <div class="login-sub">Sistem Monitoring Internal</div>
     <div class="login-error" id="login-error"><i class="bi bi-exclamation-circle"></i><span id="login-error-msg"></span></div>
@@ -23,7 +23,7 @@
       <div class="field"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" /></div>
       <button class="login-btn" onclick="doLogin()">Login</button>
     </div>
-    <div class="login-tag"><i class="bi bi-shield-lock" style="margin-right:4px"></i>Percobaan Skripsi Ko ber</div>
+    <div class="login-tag"><i class="bi bi-shield-lock" style="margin-right:4px"></i>Internal Access Only</div>
   </div>
 </div>
 
@@ -32,14 +32,14 @@
     <div class="sidebar-brand">
       <div class="sidebar-brand-logo">
         <div>
-          <div class="sidebar-brand-name">Downtime Monitor belum pasti</div>
+          <div class="sidebar-brand-name">Downtime Monitor</div>
           <div class="sidebar-brand-sub">Mesin VB-5 · PT Conbloc Internusa</div>
         </div>
       </div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-label">Main</div>
-      <div class="nav-item active" onclick="nav('dashboard',this)"><i class="bi bi-grid-1x2"></i>Dashboard percobaan testing</div>
+      <div class="nav-item active" onclick="nav('dashboard',this)"><i class="bi bi-grid-1x2"></i>Dashboard</div>
       <div class="nav-item" onclick="nav('input',this)"><i class="bi bi-tools"></i>Input Downtime</div>
       <div class="nav-label">Data</div>
       <div class="nav-item" onclick="nav('laporan',this)"><i class="bi bi-file-earmark-bar-graph"></i>Laporan</div>
@@ -64,7 +64,7 @@
   <div class="main">
     <div class="topbar">
       <div class="topbar-left">
-        <h1 id="page-title">Dashboard percobaan ko ber</h1>
+        <h1 id="page-title">Dashboard</h1>
         <p id="page-date"></p>
       </div>
       <div class="topbar-right">
@@ -133,7 +133,7 @@
             <select id="f-shift"><option value="">Pilih Shift</option><option>Shift 1 (06:00-14:00)</option><option>Shift 2 (14:00-22:00)</option><option>Shift 3 (22:00-06:00)</option></select>
           </div>
           <div class="field"><label>Kategori Mesin (Area)</label>
-            <select id="f-mesin">
+            <select id="f-mesin" onchange="onMesinChange()">
               <option value="">Pilih Area/Unit</option>
               <option>Batching Plant</option><option>Mixing Plant</option><option>Traveling Bucket</option>
               <option>Machine Plant</option><option>Curing / Finger Cart</option><option>Cubing / Robo Amica</option><option>Lain-Lain</option>
@@ -147,8 +147,11 @@
       <div class="form-section">
         <div class="form-section-title"><i class="bi bi-exclamation-diamond"></i>Jenis Problem</div>
         <div class="form-grid">
-          <div class="field"><label>Kategori Problem</label>
-            <select id="f-problem"><option value="">Memuat data problem...</option></select>
+          <div class="field"><label>Problem Spesifik <span style="color:var(--gray-400);font-weight:400">(pilih mesin dulu)</span></label>
+            <select id="f-problem" onchange="onProblemChange()" disabled><option value="">Pilih Kategori Mesin dulu</option></select>
+            <div id="f-problem-manual-wrap" style="display:none;margin-top:8px">
+              <input type="text" id="f-problem-manual" placeholder="Tuliskan jenis problem secara manual..." style="width:100%">
+            </div>
           </div>
           <div class="field"><label>Status Mesin</label>
             <select id="f-status"><option value="">Pilih Status</option><option value="breakdown">Breakdown</option><option value="maintenance">Maintenance</option><option value="normal">Normal (Operasional Tertunda)</option></select>
@@ -248,14 +251,10 @@
     </div>
 
     <div id="page-estimasi" class="page">
-      <div class="table-card" style="margin-bottom:18px">
-        <div class="table-header">
-          <h3><i class="bi bi-calendar-check" style="margin-right:8px;color:var(--green-800)"></i>Estimasi Jadwal Service Berikutnya</h3>
-          <span style="font-size:12px;color:var(--gray-400)">Dihitung otomatis berdasarkan MTBF & histori perbaikan</span>
-        </div>
-        
-        <div id="est-container"></div>
-      </div>
+      <!-- Summary bar -->
+      <div class="est-summary-bar" id="est-summary-bar"></div>
+      <!-- Cards -->
+      <div id="est-container"></div>
     </div>
 
     <div id="page-pengaturan" class="page">
